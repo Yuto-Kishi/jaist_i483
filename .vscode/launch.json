@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "lldb",
+      "request": "launch",
+      "args": [],
+      "cwd": "/Users/yutokishi/Documents/GitHub/jaist_i483",
+      "program": "/Users/yutokishi/Documents/GitHub/jaist_i483/build/Debug/outDebug"
+    }
+  ]
+}
