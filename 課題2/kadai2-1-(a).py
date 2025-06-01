@@ -1,8 +1,10 @@
-import time, sys
-from machine import Pin, I2C
-import network
-from umqtt.robust import MQTTClient
+#(a) 課題１の2（運用）で収集するデータをMQTTで適切なトピックに公開せよ
+import sys
+import time
 
+import network
+from machine import I2C, Pin
+from umqtt.robust import MQTTClient
 
 STUDENT_ID = "s2410040"
 WIFI_SSID  = "JAISTALL"
