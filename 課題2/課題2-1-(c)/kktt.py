@@ -1,13 +1,3 @@
-"""
-(c) Kafkaを利用して、下記の機能があるプログラムを開発せよ
-1. i483-sensors-[学生番号]-BH1750-temperatureとi483-sensors-[学生番号]-SCD41-co2で公開されて
-いるデータを受信し、
-2. そのデータを処理を行い、
-3. 処理の結果を適切なKafkaトピックに公開する。
-(d) 上記1c3のThreshold Detectionの結果によってesp32に搭載されているLEDを点滅せよ。
-"""
-
-
 import logging
 import re
 import threading
@@ -129,4 +119,3 @@ for msg in kafka_consumer:
             led_state.set()
         else:
             led_state.clear()
-
