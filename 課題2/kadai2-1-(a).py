@@ -196,7 +196,7 @@ class BH1750:
         return raw / 1.2
 
 # ===== 初期化 =====
-i2c = I2C(1, scl=Pin(22), sda=Pin(21))
+i2c = I2C(1, scl=Pin(19), sda=Pin(21))
 scd41 = SCD41(i2c); scd41.init()
 dps310 = DPS310(i2c)
 rpr0521 = RPR0521(i2c)
