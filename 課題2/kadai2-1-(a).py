@@ -1,4 +1,3 @@
-#(a) 課題１の2（運用）で収集するデータをMQTTで適切なトピックに公開せよ
 import sys
 import time
 
@@ -6,6 +5,7 @@ import network
 from machine import I2C, Pin
 from umqtt.robust import MQTTClient
 
+# ──★ 編集ポイント ─────────────────────────────
 STUDENT_ID = "s2410040"
 WIFI_SSID  = "JAISTALL"
 WIFI_PASS  = ""
@@ -16,9 +16,9 @@ PUB_INTERVAL = 15  # [s]
 LED_PIN = 2
 BLINK_INTERVAL_MS = 500
 LED_TOPIC = f"i483/actuators/{STUDENT_ID}/led-co2"
+# ──────────────────────────────────────────────
 
-
-
+# ===== 接続 =====
 def connect_net() -> MQTTClient:
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
