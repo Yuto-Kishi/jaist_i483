@@ -1,5 +1,3 @@
-# main.py
-
 import sys
 import time
 
@@ -23,25 +21,6 @@ LED_TOPIC = f"i483/actuators/{STUDENT_ID}/led-co2"
 led = Pin(LED_PIN, Pin.OUT)
 blink_mode = False
 last_toggle = time.ticks_ms()
-
-# MQTT 接続
-def connect_net() -> MQTTClient:
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-    print("MAC:", wlan.config('mac').hex())
-    if not wlan.isconnected():
-        wlan.connect(WIFI_SSID, WIFI_PASS)
-        while not wlan.isconnected():
-            time.sleep_ms(200)
-    print("Wi-Fi connected:", wlan.ifconfig())
-
-    cli = MQTTClient(client_id=STUDENT_ID.encode(),
-                     server=MQTT_HOST, port=MQTT_PORT, keepalive=30)
-    cli.set_callback(on_led_msg)
-    cli.connect()
-    cli.subscribe(LED_TOPIC)
-    print("MQTT connected")
-    return cli
 
 # LED メッセージハンドラ
 def on_led_msg(topic, payload):
@@ -196,9 +175,56 @@ class BH1750:
         raw = (data[0] << 8) | data[1]
         return raw / 1.2
 
+# ---- MQTT接続（初回用） ----
+def connect_net() -> MQTTClient:
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    print("MAC:", wlan.config('mac').hex())
+    if not wlan.isconnected():
+        wlan.connect(WIFI_SSID, WIFI_PASS)
+        while not wlan.isconnected():
+            print("Waiting for Wi-Fi...")
+            time.sleep_ms(200)
+    print("Wi-Fi connected:", wlan.ifconfig())
+
+    cli = MQTTClient(client_id=STUDENT_ID.encode(),
+                     server=MQTT_HOST, port=MQTT_PORT, keepalive=30)
+    cli.set_callback(on_led_msg)
+    cli.connect()
+    cli.subscribe(LED_TOPIC)
+    print("MQTT connected")
+    return cli
+
 # ---- Main 処理 ----
 def main():
     print("=== System boot ===")
+
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+
+    def ensure_wifi():
+        if not wlan.isconnected():
+            print("Wi-Fi disconnected, reconnecting...")
+            wlan.connect(WIFI_SSID, WIFI_PASS)
+            while not wlan.isconnected():
+                print("Waiting for Wi-Fi...")
+                time.sleep_ms(200)
+            print("Wi-Fi reconnected:", wlan.ifconfig())
+
+    def ensure_mqtt(cli):
+        try:
+            cli.ping()
+        except Exception as e:
+            print("MQTT disconnected, reconnecting...", e)
+            try:
+                cli.connect()
+                cli.subscribe(LED_TOPIC)
+                print("MQTT reconnected")
+            except Exception as e2:
+                print("MQTT reconnect failed:", e2)
+
+    # 初回接続
+    ensure_wifi()
     mqtt = connect_net()
 
     # I2C & センサ初期化
@@ -216,39 +242,54 @@ def main():
     print(f"Start publish loop (every {PUB_INTERVAL} s)…")
     next_t = time.ticks_ms()
 
+    global blink_mode, last_toggle
+
     while True:
-        mqtt.check_msg()
+        # --- Wi-Fi と MQTT の状態確認 ---
+        ensure_wifi()
+        ensure_mqtt(mqtt)
+
+        # MQTT メッセージチェック
+        try:
+            mqtt.check_msg()
+        except Exception as e:
+            print("MQTT check_msg failed:", e)
+
         now = time.ticks_ms()
 
         # データ送信タイミング
         if time.ticks_diff(now, next_t) >= 0:
             next_t = time.ticks_add(next_t, PUB_INTERVAL * 1000)
+            print("Publishing sensor data...")
 
-            # SCD41
-            if scd41.data_ready():
-                co2, t_scd, h_scd = scd41.read_measurement()
-                mqtt.publish(topic("SCD41", "co2"), f"{co2:.2f}")
-                mqtt.publish(topic("SCD41", "temperature"), f"{t_scd:.2f}")
-                mqtt.publish(topic("SCD41", "humidity"), f"{h_scd:.2f}")
+            try:
+                # SCD41
+                if scd41.data_ready():
+                    co2, t_scd, h_scd = scd41.read_measurement()
+                    mqtt.publish(topic("SCD41", "co2"), f"{co2:.2f}")
+                    mqtt.publish(topic("SCD41", "temperature"), f"{t_scd:.2f}")
+                    mqtt.publish(topic("SCD41", "humidity"), f"{h_scd:.2f}")
 
-            # BH1750
-            lux_bh = bh1750.read_lux()
-            mqtt.publish(topic("BH1750", "illumination"), f"{lux_bh:.2f}")
+                # BH1750
+                lux_bh = bh1750.read_lux()
+                mqtt.publish(topic("BH1750", "illumination"), f"{lux_bh:.2f}")
 
-            # DPS310
-            p, t_dp = dps310.read_measurement()
-            mqtt.publish(topic("DPS310", "air_pressure"), f"{p:.2f}")
-            mqtt.publish(topic("DPS310", "temperature"), f"{t_dp:.2f}")
+                # DPS310
+                p, t_dp = dps310.read_measurement()
+                mqtt.publish(topic("DPS310", "air_pressure"), f"{p:.2f}")
+                mqtt.publish(topic("DPS310", "temperature"), f"{t_dp:.2f}")
 
-            # RPR0521
-            als0, als1 = rpr0521.read()
-            ir_rpr = als1
-            lux_rpr = rpr0521.lux_from_raw(als0, als1)
-            mqtt.publish(topic("RPR0521", "infrared_illumination"), f"{ir_rpr:.2f}")
-            mqtt.publish(topic("RPR0521", "illumination"), f"{lux_rpr:.2f}")
+                # RPR0521
+                als0, als1 = rpr0521.read()
+                ir_rpr = als1
+                lux_rpr = rpr0521.lux_from_raw(als0, als1)
+                mqtt.publish(topic("RPR0521", "infrared_illumination"), f"{ir_rpr:.2f}")
+                mqtt.publish(topic("RPR0521", "illumination"), f"{lux_rpr:.2f}")
+
+            except Exception as e:
+                print("Sensor publish failed:", e)
 
         # LED ブリンク
-        global blink_mode, last_toggle
         if blink_mode and time.ticks_diff(now, last_toggle) >= BLINK_INTERVAL_MS:
             led.value(not led.value())
             last_toggle = now
